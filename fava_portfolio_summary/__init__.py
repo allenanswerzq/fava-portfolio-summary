@@ -42,22 +42,23 @@ class PortfolioSummary(FavaExtensionBase):  # pragma: no cover
         self.irr_cache = {}
         self.dividend_cache = {}
 
-    def portfolio_accounts(self):
+    def portfolio_accounts(self, filtered):
         """An account tree based on matching regex patterns."""
         if self.ledger.accounts is not self.accounts:
             # self.ledger.accounts should be reset every time the databse is loaded
             self.dividend_cache = {}
             self.irr_cache = {}
             self.accounts = self.ledger.accounts
-        portfolio_summary = PortfolioSummaryInstance(self.ledger, self.config, self.irr_cache, self.dividend_cache)
+        portfolio_summary = PortfolioSummaryInstance(self.ledger, self.config, self.irr_cache, self.dividend_cache, filtered)
         return portfolio_summary.run()
 
 class PortfolioSummaryInstance:  # pragma: no cover
     """Thread-safe instance of Portfolio Summary"""
     # pylint: disable=too-many-instance-attributes
 
-    def __init__(self, ledger, config, irr_cache, dividend_cache):
+    def __init__(self, ledger, config, irr_cache, dividend_cache, filtered):
         self.ledger = ledger
+        self.filtered = filtered
         self.config = config
         self.irr_cache = irr_cache
         self.dividend_cache = dividend_cache
@@ -82,7 +83,7 @@ class PortfolioSummaryInstance:  # pragma: no cover
     def run(self):
         """Calculdate summary"""
         all_mwr_internal = set()
-        tree = self.ledger.root_tree
+        tree = self.filtered.root_tree
         portfolios = []
         _t0 = time.time()
         seen_cols = {}  # Use a dict instead of a set to preserve order
@@ -92,12 +93,8 @@ class PortfolioSummaryInstance:  # pragma: no cover
                 break
             key, pattern, internal, cols, mwr, twr = res
             seen_cols.update({_: None for _ in cols})
-            try:
-                title, portfolio = self._account_metadata_pattern(
-                    tree, key, pattern, internal, mwr, twr, "dividends" in cols)
-            except Exception as _e:
-                # We re-raise to prevent masking the error.  Should this be a FavaAPIException?
-                raise Exception from _e
+            title, portfolio = self._account_metadata_pattern(
+                tree, key, pattern, internal, mwr, twr, "dividends" in cols)
             all_mwr_internal |= internal
             portfolios.append((title, (self._get_types(cols), [portfolio])))
 

@@ -18,7 +18,7 @@
 
 <h2>Portfolio Summary Report</h2>
 <br />
-{% for title, data in extension.portfolio_accounts() %}
+{% for title, data in extension.portfolio_accounts(g.filtered) %}
   {% set types = data[0] %}
   {% set rows = data[1] %}
   <h3>{{title}}</h3>
