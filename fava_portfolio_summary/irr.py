@@ -35,17 +35,19 @@ from fava.helpers import BeancountError
 try:
     from scipy.optimize import newton as secant_method  # pylint: disable=import-error
 except Exception:
+
     def secant_method(f, x0, tol=0.0001):
         """
         Solve for x where f(x)=0, given starting x0 and tolerance.
         """
         # pylint: disable=invalid-name
         x1 = x0 * 1.1
-        while abs(x1 - x0)/abs(x1) > tol:
-            x0, x1 = x1, x1 - f(x1) * (x1 - x0)/(f(x1) - f(x0))
+        while abs(x1 - x0) / abs(x1) > tol:
+            x0, x1 = x1, x1 - f(x1) * (x1 - x0) / (f(x1) - f(x0))
         return x1
 
-def xnpv(rate,cashflows):
+
+def xnpv(rate, cashflows):
     """
     Calculate the net present value of a series of cashflows at irregular intervals.
     Arguments
@@ -67,12 +69,14 @@ def xnpv(rate,cashflows):
     * This function is equivalent to the Microsoft Excel function of the same name.
     """
     # pylint: disable=invalid-name
-    chron_order = sorted(cashflows, key = lambda x: x[0])
-    t0 = chron_order[0][0] #t0 is the date of the first cash flow
+    chron_order = sorted(cashflows, key=lambda x: x[0])
+    t0 = chron_order[0][0]  #t0 is the date of the first cash flow
 
-    return sum([cf/(1+rate)**((t-t0).days/365.0) for (t,cf) in chron_order])
+    return sum(
+        [cf / (1 + rate)**((t - t0).days / 365.0) for (t, cf) in chron_order])
 
-def xirr(cashflows,guess=0.1):
+
+def xirr(cashflows, guess=0.1):
     """
     Calculate the Internal Rate of Return of a series of cashflows at irregular intervals.
     Arguments
@@ -98,10 +102,11 @@ def xirr(cashflows,guess=0.1):
       preferred.
     """
     try:
-        return secant_method(lambda r: xnpv(r,cashflows),guess)
+        return secant_method(lambda r: xnpv(r, cashflows), guess)
     except Exception as _e:
         logging.error("No solution found for IRR: %s", _e)
         return 0.0
+
 
 def xtwrr(periods, debug=False):
     """Calculate TWRR from a set of date-ordered periods"""
@@ -109,7 +114,9 @@ def xtwrr(periods, debug=False):
     last = float(periods[dates[0]][0])
     mean = 1.0
     if debug:
-        print("Date          start-balance     cashflow     end-balance     partial")
+        print(
+            "Date          start-balance     cashflow     end-balance     partial"
+        )
     for date in dates[1:]:
         cur_bal = float(periods[date][0])
         cashflow = float(periods[date][1])
@@ -118,23 +125,28 @@ def xtwrr(periods, debug=False):
         if last != 0:
             partial = 1 + ((cur_bal - cashflow) - last) / last
         if debug:
-            print(f"{date.strftime('%Y-%m-%d')}  {last:-15.2f}  {cashflow:-11.2f}  {cur_bal:-14.2f}  {partial:-10.2f}")
+            print(
+                f"{date.strftime('%Y-%m-%d')}  {last:-15.2f}  {cashflow:-11.2f}  {cur_bal:-14.2f}  {partial:-10.2f}"
+            )
         mean *= partial
         last = cur_bal
     mean = mean - 1.0
     days = (dates[-1] - dates[0]).days
     if days == 0:
         return 0.0
-    twrr = (1 + mean) ** (365.0 / days) - 1
+    twrr = (1 + mean)**(365.0 / days) - 1
     return twrr
+
 
 def fmt_d(num):
     """Decimal formatter"""
     return f'${num:,.0f}'
 
+
 def fmt_pct(num):
     """Percent formatter"""
     return f'{num*100:.2f}%'
+
 
 def add_position(position, inventory):
     """Add a posting to the inventory"""
@@ -148,6 +160,7 @@ def add_position(position, inventory):
 
 class IRR:
     """Wrapper class to allow caching results of multiple calculations to improve performance"""
+
     # pylint: disable=too-many-instance-attributes
     def __init__(self, entries, price_map, currency, errors=None):
         self.all_entries = entries
@@ -166,7 +179,9 @@ class IRR:
 
     def _error(self, msg, meta=None):
         if self.errors:
-            if not any(_.source == meta and _.message == msg and _.entry is None for _ in self.errors):
+            if not any(
+                    _.source == meta and _.message == msg and _.entry is None
+                    for _ in self.errors):
                 self.errors.append(BeancountError(meta, msg, None))
 
     def elapsed(self):
@@ -209,12 +224,14 @@ class IRR:
         for position in inventory:
             value = date_cache.get(position)
             if not value:
-                value = beancount.core.convert.convert_position(position, self.currency, self.price_map, date)
+                value = beancount.core.convert.convert_position(
+                    position, self.currency, self.price_map, date)
                 if value.currency != self.currency:
                     # try to convert position via cost
                     if position.cost and position.cost.currency == self.currency:
-                        value = beancount.core.amount.Amount(position.cost.number * position.units.number,
-                                                             self.currency)
+                        value = beancount.core.amount.Amount(
+                            position.cost.number * position.units.number,
+                            self.currency)
                     else:
                         continue
                 date_cache[position] = value
@@ -225,13 +242,15 @@ class IRR:
     def is_interesting_posting(self, posting):
         """ Is this posting for an account we care about? """
         if posting.account not in self.interesting:
-            self.interesting[posting.account] = bool(self.patterns.search(posting.account))
+            self.interesting[posting.account] = bool(
+                self.patterns.search(posting.account))
         return self.interesting[posting.account]
 
     def is_internal_account(self, posting):
         """ Is this an internal account that should be ignored? """
         if posting.account not in self.internal:
-            self.internal[posting.account] = bool(self.internal_patterns.search(posting.account))
+            self.internal[posting.account] = bool(
+                self.internal_patterns.search(posting.account))
         return self.internal[posting.account]
 
     def is_interesting_entry(self, entry):
@@ -241,9 +260,16 @@ class IRR:
                 return True
         return False
 
-    def calculate(self, patterns, internal_patterns=None, start_date=None, end_date=None,
-                  mwr=True, twr=False,
-                  cashflows=None, inflow_accounts=None, outflow_accounts=None,
+    def calculate(self,
+                  patterns,
+                  internal_patterns=None,
+                  start_date=None,
+                  end_date=None,
+                  mwr=True,
+                  twr=False,
+                  cashflows=None,
+                  inflow_accounts=None,
+                  outflow_accounts=None,
                   debug_twr=False):
         """Calulate MWRR or TWRR for a set of accounts"""
         ## pylint: disable=too-many-branches too-many-statements too-many-locals too-many-arguments
@@ -263,7 +289,8 @@ class IRR:
         elapsed = [0, 0, 0, 0, 0, 0, 0, 0]
         elapsed[0] = time.time()
         if internal_patterns:
-            self.internal_patterns = re.compile(fr'^(?:{ "|".join(internal_patterns) })$')
+            self.internal_patterns = re.compile(
+                fr'^(?:{ "|".join(internal_patterns) })$')
         else:
             self.internal_patterns = re.compile('^$')
 
@@ -315,9 +342,10 @@ class IRR:
                     if posting.cost and posting.cost.currency == self.currency:
                         value = posting.cost.number * posting.units.number
                     else:
-                        logging.error(f'Could not convert posting {converted} from {entry.date} at '
-                                      f'{posting.meta["filename"]}:{posting.meta["lineno"]} to {self.currency}. '
-                                       'IRR will be wrong.')
+                        logging.error(
+                            f'Could not convert posting {converted} from {entry.date} at '
+                            f'{posting.meta["filename"]}:{posting.meta["lineno"]} to {self.currency}. '
+                            'IRR will be wrong.')
                         self._error(
                             f"Could not convert posting {converted} from {entry.date}, IRR will be wrong",
                             posting.meta)
@@ -334,22 +362,28 @@ class IRR:
                         outflow_accounts.add(posting.account)
                     else:
                         inflow_accounts.add(posting.account)
+
             # calculate net cashflow & the date
             if cashflow.quantize(Decimal('.01')) != 0:
                 cashflows.append((entry.date, cashflow))
                 if twr:
                     if entry.date not in twrr_periods:
-                        twrr_periods[entry.date] = [self.get_value_as_of(None, entry.date), 0]
+                        twrr_periods[entry.date] = [
+                            self.get_value_as_of(None, entry.date), 0
+                        ]
                     twrr_periods[entry.date][1] += cashflow
 
         elapsed[4] = time.time()
         start_value = self.get_value_as_of(interesting_txns, start_date)
         if start_date not in twrr_periods and start_date != datetime.date.min:
-            twrr_periods[start_date] = [start_value, 0]  # We want the after-cashflow value
+            twrr_periods[start_date] = [start_value,
+                                        0]  # We want the after-cashflow value
         # the start_value will include any cashflows that occurred on that date...
         # this leads to double-counting them, since they'll also appear in our cashflows
         # list. So we need to deduct them from start_value
-        opening_txns = [amount for (date, amount) in cashflows if date == start_date]
+        opening_txns = [
+            amount for (date, amount) in cashflows if date == start_date
+        ]
         start_value -= functools.reduce(operator.add, opening_txns, 0)
         end_value = self.get_value_as_of(None, end_date)
         if end_date not in twrr_periods:
@@ -366,40 +400,62 @@ class IRR:
         if mwr:
             if cashflows:
                 # we need to coerce everything to a float for xirr to work...
-                irr = xirr([(d, float(f)) for (d,f) in cashflows])
+                irr = xirr([(d, float(f)) for (d, f) in cashflows])
             else:
-                logging.error(f'No cashflows found during the time period {start_date} -> {end_date}')
+                logging.error(
+                    f'No cashflows found during the time period {start_date} -> {end_date}'
+                )
         elapsed[6] = time.time()
         if twr and twrr_periods:
             twrr = xtwrr(twrr_periods, debug=debug_twr)
         elapsed[7] = time.time()
         for i in range(7):
-            delta = elapsed[i+1] - elapsed[i]
+            delta = elapsed[i + 1] - elapsed[i]
             self.times[i] += delta
             # print(f"T{i}: delta")
         return irr, twrr
+
 
 def main():
     """Entrypoint"""
     ## pylint: disable=too-many-branches too-many-statements
     logging.basicConfig(format='%(levelname)s: %(message)s')
-    parser = argparse.ArgumentParser(
-        description="Calculate return data."
-    )
+    parser = argparse.ArgumentParser(description="Calculate return data.")
     parser.add_argument('bean', help='Path to the beancount file.')
-    parser.add_argument('--currency', default='USD', help='Currency to use for calculating returns.')
-    parser.add_argument('--account', action='append', default=[],
-        help='Regex pattern of accounts to include when calculating returns. Can be specified multiple times.')
-    parser.add_argument('--internal', action='append', default=[],
-        help='Regex pattern of accounts that represent internal cashflows (i.e. dividends or interest)')
+    parser.add_argument('--currency',
+                        default='CNY',
+                        help='Currency to use for calculating returns.')
+    parser.add_argument(
+        '--account',
+        action='append',
+        default=[],
+        help=
+        'Regex pattern of accounts to include when calculating returns. Can be specified multiple times.'
+    )
+    parser.add_argument(
+        '--internal',
+        action='append',
+        default=[],
+        help=
+        'Regex pattern of accounts that represent internal cashflows (i.e. dividends or interest)'
+    )
 
-    parser.add_argument('--from', dest='date_from', type=lambda d: datetime.datetime.strptime(d, '%Y-%m-%d').date(),
+    parser.add_argument(
+        '--from',
+        dest='date_from',
+        type=lambda d: datetime.datetime.strptime(d, '%Y-%m-%d').date(),
         help='Start date: YYYY-MM-DD, 2016-12-31')
-    parser.add_argument('--to', dest='date_to', type=lambda d: datetime.datetime.strptime(d, '%Y-%m-%d').date(),
+    parser.add_argument(
+        '--to',
+        dest='date_to',
+        type=lambda d: datetime.datetime.strptime(d, '%Y-%m-%d').date(),
         help='End date YYYY-MM-DD, 2016-12-31')
 
     date_range = parser.add_mutually_exclusive_group()
-    date_range.add_argument('--year', default=False, type=int, help='Year. Shorthand for --from/--to.')
+    date_range.add_argument('--year',
+                            default=False,
+                            type=int,
+                            help='Year. Shorthand for --from/--to.')
     date_range.add_argument('--ytd', action='store_true')
     date_range.add_argument('--1year', action='store_true')
     date_range.add_argument('--2year', action='store_true')
@@ -407,21 +463,31 @@ def main():
     date_range.add_argument('--5year', action='store_true')
     date_range.add_argument('--10year', action='store_true')
 
-    parser.add_argument('--debug-inflows', action='store_true',
+    parser.add_argument(
+        '--debug-inflows',
+        action='store_true',
         help='Print list of all inflow accounts in transactions.')
-    parser.add_argument('--debug-outflows', action='store_true',
+    parser.add_argument(
+        '--debug-outflows',
+        action='store_true',
         help='Print list of all outflow accounts in transactions.')
-    parser.add_argument('--debug-cashflows', action='store_true',
+    parser.add_argument(
+        '--debug-cashflows',
+        action='store_true',
         help='Print list of all cashflows used for the IRR calculation.')
-    parser.add_argument('--debug-twr', action='store_true',
-        help='Print calculations for TWR.')
+    parser.add_argument('--debug-twr',
+                        action='store_true',
+                        help='Print calculations for TWR.')
 
     args = parser.parse_args()
 
     shortcuts = ['year', 'ytd', '1year', '2year', '3year', '5year', '10year']
-    shortcut_used = functools.reduce(operator.__or__, [getattr(args, x) for x in shortcuts])
+    shortcut_used = functools.reduce(operator.__or__,
+                                     [getattr(args, x) for x in shortcuts])
     if shortcut_used and (args.date_from or args.date_to):
-        raise Exception('Date shortcut options mutually exclusive with --to/--from options')
+        raise Exception(
+            'Date shortcut options mutually exclusive with --to/--from options'
+        )
 
     if args.year:
         args.date_from = datetime.date(args.year, 1, 1)
@@ -457,17 +523,24 @@ def main():
         args.date_from = today + relativedelta(years=-10)
         args.date_to = today
 
-    entries, _errors, _options = beancount.loader.load_file(args.bean, logging.info, log_errors=sys.stderr)
+    entries, _errors, _options = beancount.loader.load_file(
+        args.bean, logging.info, log_errors=sys.stderr)
     price_map = beancount.core.prices.build_price_map(entries)
 
     cashflows = []
     inflow_accounts = set()
     outflow_accounts = set()
-    irr, twr = IRR(entries, price_map, args.currency).calculate(
-        args.account, internal_patterns=args.internal, start_date=args.date_from, end_date=args.date_to,
-        mwr=True, twr=True,
-        cashflows=cashflows, inflow_accounts=inflow_accounts, outflow_accounts=outflow_accounts,
-        debug_twr=args.debug_twr)
+    irr, twr = IRR(entries, price_map,
+                   args.currency).calculate(args.account,
+                                            internal_patterns=args.internal,
+                                            start_date=args.date_from,
+                                            end_date=args.date_to,
+                                            mwr=True,
+                                            twr=True,
+                                            cashflows=cashflows,
+                                            inflow_accounts=inflow_accounts,
+                                            outflow_accounts=outflow_accounts,
+                                            debug_twr=args.debug_twr)
     if irr:
         print(f"IRR: {irr}")
     if twr:
@@ -480,6 +553,7 @@ def main():
     if args.debug_outflows:
         print('<< [outflows]')
         pprint(outflow_accounts)
+
 
 if __name__ == '__main__':
     main()
