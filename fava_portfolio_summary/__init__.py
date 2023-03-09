@@ -198,7 +198,7 @@ class PortfolioSummaryInstance:  # pragma: no cover
                         raise FavaAPIException(
                             f"Portfolio List: '{col}' is not a valid column. "
                             f"Must be one of {self.all_cols}")
-                group_name = group['name']
+                group = group['name']
             except Exception as _e:
                 raise FavaAPIException(
                     f"Portfolio List: Error parsing group {str(group)}: {str(_e)}"
@@ -218,7 +218,7 @@ class PortfolioSummaryInstance:  # pragma: no cover
         if not grp_dividends and 'dividends' in grp_cols:
             grp_cols.remove("dividends")
 
-        return group_name, grp_internal, grp_cols, grp_mwr, grp_twr
+        return group, grp_internal, grp_cols, grp_mwr, grp_twr
 
     @staticmethod
     def _get_types(cols):
@@ -446,7 +446,11 @@ class PortfolioSummaryInstance:  # pragma: no cover
                                       mwr=calc_mwr,
                                       twr=calc_twr)
         if mwr:
-            mwr = round(100 * mwr, 2)
+            if isinstance(mwr, complex):
+                print(patterns)
+                mwr = 0
+            else:
+                mwr = round(100 * mwr, 2)
 
         if twr:
             twr = round(100 * twr, 2)
