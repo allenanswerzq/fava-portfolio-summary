@@ -43,12 +43,11 @@ class PortfolioSummary(FavaExtensionBase):  # pragma: no cover
         self.irr_cache = {}
         self.dividend_cache = {}
 
-    def portfolio_accounts(self, filtered):
+    def portfolio_accounts(self):
         """An account tree based on matching regex patterns."""
         portfolio_summary = PortfolioSummaryInstance(self.ledger, self.config,
                                                      self.irr_cache,
-                                                     self.dividend_cache,
-                                                     filtered)
+                                                     self.dividend_cache)
         return portfolio_summary.run()
 
 
@@ -57,9 +56,8 @@ class PortfolioSummaryInstance:  # pragma: no cover
 
     # pylint: disable=too-many-instance-attributes
 
-    def __init__(self, ledger, config, irr_cache, dividend_cache, filtered):
+    def __init__(self, ledger, config, irr_cache, dividend_cache):
         self.ledger = ledger
-        self.filtered = filtered
         self.config = config
         self.irr_cache = irr_cache
         self.dividend_cache = dividend_cache
@@ -89,7 +87,7 @@ class PortfolioSummaryInstance:  # pragma: no cover
 
     def run(self):
         """Calculdate summary"""
-        tree = self.filtered.root_tree
+        tree = g.filtered.root_tree
         all_mwr_internal = set()
         portfolios = []
         _t0 = time.time()
@@ -110,7 +108,7 @@ class PortfolioSummaryInstance:  # pragma: no cover
 
         b, c = self.total["balance"], self.total["cost"]
         self.total["change"] = round_percent(float(b - c) / (float(c) + 0.0001))
-        self.total["pnl"] = round_percent(b - c)
+        self.total["pnl"] = round(b - c, 2)
 
         if 'mwr' in seen_cols or 'twr' in seen_cols:
             self.total['mwr'], self.total['twr'] = self._calculate_irr_twr(
@@ -274,15 +272,15 @@ class PortfolioSummaryInstance:  # pragma: no cover
 
     def _process_dividends(self, account, currency):
         parent_name = ":".join(account.name.split(":")[:-1])
-        cache_key = (account.name, currency, self.filtered.end_date)
+        cache_key = (account.name, currency, g.filtered.end_date)
         if cache_key in self.dividend_cache:
             return self.dividend_cache[cache_key]
         query = (
             f"SELECT SUM(CONVERT(COST(position),'{self.operating_currency}')) AS dividends "
             f"FROM HAS_ACCOUNT('{currency}') AND HAS_ACCOUNT('{parent_name}') WHERE LEAF(account) = 'Dividends'"
         )
-        if self.filtered.end_date:
-            query += f" AND date < {self.filtered.end_date}"
+        if g.filtered.end_date:
+            query += f" AND date < {g.filtered.end_date}"
         start = time.time()
         result = self.ledger.query_shell.execute_query(query)
         self.dividends_elapsed += time.time() - start
@@ -305,7 +303,7 @@ class PortfolioSummaryInstance:  # pragma: no cover
         row['pnl'] = ZERO
         row['dividends'] = ZERO
 
-        date = self.filtered.end_date
+        date = g.filtered.end_date
         price_map = g.ledger.price_map
         balance = cost_or_value(node.balance, "at_value", price_map, date=date)
         cost = cost_or_value(node.balance, "at_cost", price_map, date=date)
@@ -350,7 +348,7 @@ class PortfolioSummaryInstance:  # pragma: no cover
         ### GET LAST CURRENCY PRICE DATE
         if row_currency is not None and row_currency != self.operating_currency:
             try:
-                dict_dates = g.ledger.prices(self.operating_currency,
+                dict_dates = g.filtered.prices(self.operating_currency,
                                              row_currency)
                 if len(dict_dates) > 0:
                     row["last-date"] = dict_dates[-1][0]
@@ -420,7 +418,7 @@ class PortfolioSummaryInstance:  # pragma: no cover
                 b, c = row["balance"], row["cost"]
                 row["allocation"] = round_percent(b / total['balance'])
                 row["change"] = round_percent(float(b - c) / (float(c) + 0.0001))
-                row["pnl"] = round_percent(b - c)
+                row["pnl"] = round(b - c, 2)
 
         self.total['balance'] += total['balance']
         self.total['cost'] += total['cost']
@@ -434,27 +432,23 @@ class PortfolioSummaryInstance:  # pragma: no cover
         return total
 
     def _calculate_irr_twr(self, patterns, internal, calc_mwr, calc_twr):
-        cache_key = (",".join(patterns), ",".join(internal),
-                     self.filtered.end_date, calc_mwr, calc_twr)
-        if cache_key in self.irr_cache:
-            return self.irr_cache[cache_key]
+        # cache_key = (",".join(patterns), ",".join(internal),
+        #              g.filtered.end_date, calc_mwr, calc_twr)
+        # if cache_key in self.irr_cache:
+        #     return self.irr_cache[cache_key]
 
         mwr, twr = self.irr.calculate(patterns,
                                       internal_patterns=internal,
                                       start_date=None,
-                                      end_date=self.filtered.end_date,
+                                      end_date=g.filtered.end_date,
                                       mwr=calc_mwr,
                                       twr=calc_twr)
         if mwr:
-            if isinstance(mwr, complex):
-                print(patterns)
-                mwr = 0
-            else:
-                mwr = round(100 * mwr, 2)
+            mwr = round(100 * mwr, 2)
 
         if twr:
             twr = round(100 * twr, 2)
 
-        self.irr_cache[cache_key] = [mwr, twr]
+        # self.irr_cache[cache_key] = [mwr, twr]
         print(f'mwr: {mwr} twr: {twr}')
         return mwr, twr
